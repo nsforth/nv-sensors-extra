@@ -348,7 +348,7 @@ static void nv_sensors_extra_unwind_devices(void)
 
 static int __init nv_sensors_extra_init(void)
 {
-	struct pci_dev *pdev;
+	struct pci_dev *pdev = NULL;
 	int err;
 
 	/*
