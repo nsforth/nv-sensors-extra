@@ -13,8 +13,11 @@ KERNEL="${1:-$(uname -r)}"
 [[ $(id -u) -eq 0 ]] || { echo "ERROR: run as root (sudo)" >&2; exit 1; }
 [[ -f "${SRC_DIR}/dkms.conf" ]] || { echo "ERROR: no dkms.conf in ${SRC_DIR}" >&2; exit 1; }
 
+# Capture status before grepping: `grep -q` exits on first match, so piping
+# dkms straight into it kills dkms with SIGPIPE and pipefail reports 141.
 # dkms status (3.x) format: "<name>/<ver>, <kernel>, <arch>: built"
-if dkms status | grep -q "^${PKG_NAME}/${PKG_VERSION}"; then
+DKMS_STATUS="$(dkms status || true)"
+if grep -q "^${PKG_NAME}/${PKG_VERSION}" <<<"${DKMS_STATUS}"; then
     echo ">> ${PKG_NAME}/${PKG_VERSION} already added, skipping dkms add"
 else
     dkms add "${SRC_DIR}"

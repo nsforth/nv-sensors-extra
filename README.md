@@ -69,17 +69,52 @@ value over the 27..42 °C range. The exact offset is per-die /
 per-architecture — measure it on your own card (see `RESEARCH.md` for the
 method) and apply it in userspace, not in the module.
 
-The standard way is the lm-sensors offset. Create
+The standard way is the lm-sensors `compute` statement. Create
 `/etc/sensors.d/nv-sensors-extra`:
 
 ```
-chip "nv_sensors_extra"
-temp1 offset -2
+chip "nv_sensors_extra-*"
+compute temp1 @ - 2, @ + 2
+compute temp2 @ - x, @ + x
+compute temp3 @ - y, @ + y
 ```
 
-The offset is in whole degrees Celsius and applies to every card with the
-`nv_sensors_extra` hwmon name (same for `temp2`/`temp3` if you ever need
-it for them).
+Two syntax details that are easy to get wrong (both fail silently, leaving
+the reading uncalibrated):
+
+- A `chip` name must be what `sensors` prints, i.e.
+  `<hwmon name>-<bus id>` (`nv_sensors_extra-pci-0100`), or a pattern.
+  A bare `nv_sensors_extra` is rejected with
+  `Error: File /etc/sensors.d/..., line 1: Parse error in chip name` and
+  the whole block is ignored. `nv_sensors_extra-*` matches every card.
+- There is **no `offset` statement** in lm-sensors — the valid statements
+  are `chip`, `label`, `ignore`, `compute`, `set` and `bus`; anything else
+  gives `Error: Line N: Invalid keyword`. The second expression of
+  `compute` is the inverse used when writing limits back, so keep both.
+
+Check that it took effect — parse errors go to stderr, so don't discard
+them:
+
+```sh
+sensors 2>&1 | grep -A4 nv_sensors_extra
+nvidia-smi --query-gpu=index,temperature.gpu --format=csv
+```
+
+If the cards in a multi-GPU box drift differently, give each card its own
+block with the exact chip name instead of the pattern:
+
+```
+chip "nv_sensors_extra-pci-0100"
+compute temp1 @ - 2, @ + 2
+chip "nv_sensors_extra-pci-0600"
+compute temp1 @ - 1, @ + 1
+```
+
+`compute` only affects readers that go through libsensors (`sensors`,
+lm-sensors based daemons); raw `sysfs` reads and `nvidia-smi` keep
+reporting uncalibrated values. The expression works on the converted
+value, so `2` means 2 °C, not 2000 millidegrees. Apply the same form to
+`temp2`/`temp3` if you ever need it for them.
 
 ## Requirements (Debian/Ubuntu)
 
